@@ -198,7 +198,7 @@ namespace Msal {
                 validateAuthority,
                 cacheLocation = 'sessionStorage',
                 authority = 'https://login.microsoftonline.com/common',
-                redirectUri: string = window.location.href.split("?")[0].split("#")[0]
+                redirectUri = window.location.href.split("?")[0].split("#")[0]
             }: {
                 tokenReceivedCallback?: tokenReceivedCallback,
                 validateAuthority?: boolean,
@@ -206,7 +206,7 @@ namespace Msal {
                 authority?: string,
                 redirectUri?: string
             }) {
-            this.redirectUri = window.location.href.split("?")[0].split("#")[0];
+            this.redirectUri = redirectUri;
             this.clientId = clientId;
             this._tokenReceivedCallback = tokenReceivedCallback;
             this.cacheLocation = cacheLocation;
