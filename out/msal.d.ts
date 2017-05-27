@@ -317,7 +317,7 @@ declare namespace Msal {
         redirectUri: string;
         postLogoutredirectUri: string;
         navigateToLoginRequestUrl: boolean;
-        constructor(clientId: string, {tokenReceivedCallback, validateAuthority, cacheLocation, authority, redirectUri: string}: {
+        constructor(clientId: string, {tokenReceivedCallback, validateAuthority, cacheLocation, authority, redirectUri}: {
             tokenReceivedCallback?: tokenReceivedCallback;
             validateAuthority?: boolean;
             cacheLocation?: string;
