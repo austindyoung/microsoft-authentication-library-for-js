@@ -312,6 +312,8 @@ declare namespace Msal {
         private _user;
         clientId: string;
         private authorityInstance;
+        private authContextToRepresentative;
+        private renewalRequestToRepresentative;
         authority: string;
         validateAuthority: boolean;
         redirectUri: string;
@@ -358,6 +360,8 @@ declare namespace Msal {
         private getScopeFromState(state);
         private isRenewalState(state);
         private getRenewalUrl(authenticationRequest, scopes, user);
+        private getAuthContextHash(scope, responseType);
+        private getRequestRepresentative(state, scope);
     }
 }
 declare namespace Msal {

@@ -1322,42 +1322,11 @@ var Msal;
             return scopes;
         };
         UserAgentApplication.prototype.registerCallback = function (authenticationRequest, scope, resolve, reject) {
-            var _this = this;
             this._activeRenewals[scope] = authenticationRequest.state;
-            if (window.callBacksMappedToRenewStates[scope] && window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType]) {
-                window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType].push({ resolve: resolve, reject: reject });
-            }
-            if (!window.callBacksMappedToRenewStates[scope]) {
-                window.callBacksMappedToRenewStates[scope] = (_a = {}, _a[authenticationRequest.responseType] = [{ resolve: resolve, reject: reject }], _a);
-                window.callBacksMappedToRenewStates[authenticationRequest.state] = window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType];
-            }
-            if (!window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType]) {
-                window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType] = [{ resolve: resolve, reject: reject }];
-                window.callBacksMappedToRenewStates[authenticationRequest.state] = window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType];
-            }
-            if (this.isRenewalState(authenticationRequest.state)) {
-                window.callBackMappedToRenewStates[authenticationRequest.state] =
-                    function (errorDesc, token, error, tokenType) {
-                        _this._activeRenewals[scope] = null;
-                        for (var i = 0; i < window.callBacksMappedToRenewStates[authenticationRequest.state].length; ++i) {
-                            try {
-                                if (errorDesc || error) {
-                                    window.callBacksMappedToRenewStates[authenticationRequest.state][i].reject(errorDesc + ": " + error);
-                                    ;
-                                }
-                                else if (token) {
-                                    window.callBacksMappedToRenewStates[authenticationRequest.state][i].resolve(token);
-                                }
-                            }
-                            catch (e) {
-                                _this._requestContext.logger.warning(e);
-                            }
-                        }
-                        window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType] = null;
-                        window.callBackMappedToRenewStates[authenticationRequest.state] = null;
-                    };
-            }
-            var _a;
+            var contextHash = this.getAuthContextHash(authenticationRequest.state, scope);
+            var priorRenewalRepresentative = this.authContextToRepresentative[contextHash];
+            this.authContextToRepresentative[scope + authenticationRequest.responseType] = priorRenewalRepresentative || authenticationRequest.state;
+            this.renewalRequestToRepresentative[authenticationRequest.state] = this.authContextToRepresentative[contextHash];
         };
         UserAgentApplication.prototype.getCachedToken = function (authenticationRequest, user) {
             var accessTokenCacheItem = null;
@@ -1761,6 +1730,7 @@ var Msal;
             this.loadFrameTimeout(urlNavigate, 'msalRenewFrame' + scope, scope, authenticationRequest.state);
         };
         UserAgentApplication.prototype.renewIdToken = function (scopes, resolve, reject, user, authenticationRequest, extraQueryParameters) {
+            var _this = this;
             var scope = scopes.join(" ").toLowerCase();
             this._requestContext.logger.info('renewidToken is called');
             if (extraQueryParameters) {
@@ -1775,7 +1745,6 @@ var Msal;
                 this._cacheStorage.setItem(authorityKey, authenticationRequest.authority);
             }
             this.registerCallback(authenticationRequest, this.clientId, resolve, reject);
-            var frameHandle = this.addAdalFrame("msalIdTokenFrame", authenticationRequest.state);
             if (this.isRenewalState(authenticationRequest.state)) {
                 this._cacheStorage.setItem(Msal.Constants.nonceIdToken, authenticationRequest.nonce);
             }
@@ -1783,8 +1752,14 @@ var Msal;
             this._renewStates.push(authenticationRequest.state);
             var urlNavigate = this.getRenewalUrl(authenticationRequest, scopes, user);
             this._requestContext.logger.infoPii('Navigate to:' + urlNavigate);
-            frameHandle.src = 'about:blank';
-            this.loadFrameTimeout(urlNavigate, 'adalIdTokenFrame', this.clientId, authenticationRequest.state);
+            this.loadFrameTimeout(urlNavigate, this.getAuthContextHash(authenticationRequest.state, scope), this.clientId, authenticationRequest.state);
+            var interval = setInterval(function () {
+                var iframe = document.getElementById(_this.getAuthContextHash(authenticationRequest.state, scope));
+                if (iframe && iframe['contentWindow'].location.hash.length) {
+                    debugger;
+                    clearInterval(interval);
+                }
+            }, 1);
         };
         UserAgentApplication.prototype.getUser = function () {
             if (this._user) {
@@ -2072,6 +2047,12 @@ var Msal;
         UserAgentApplication.prototype.getRenewalUrl = function (authenticationRequest, scopes, user) {
             var urlNavigate = authenticationRequest.createNavigateUrl(scopes) + '&prompt=none';
             return this.addHintParameters(urlNavigate, user);
+        };
+        UserAgentApplication.prototype.getAuthContextHash = function (scope, responseType) {
+            return scope + responseType;
+        };
+        UserAgentApplication.prototype.getRequestRepresentative = function (state, scope) {
+            return this.authContextToRepresentative[this.getAuthContextHash(state, scope)];
         };
         return UserAgentApplication;
     }());

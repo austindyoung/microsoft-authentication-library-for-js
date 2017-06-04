@@ -130,6 +130,16 @@ namespace Msal {
         */
         private authorityInstance: Authority;
 
+        /***
+        * @hidden
+        */
+        private authContextToRepresentative: {[state:string]: string};
+
+         /***
+        * @hidden
+        */
+        private renewalRequestToRepresentative: {[state:string]: string};
+
         /**
         * Used to set the authority.
         * @param {string} authority - A URL indicating a directory that MSAL can use to obtain tokens.
@@ -514,39 +524,11 @@ namespace Msal {
         */
         private registerCallback(authenticationRequest: AuthenticationRequestParameters, scope: string, resolve: Function, reject: Function): void {
             this._activeRenewals[scope] = authenticationRequest.state;
+            const contextHash = this.getAuthContextHash(authenticationRequest.state, scope);
+            const priorRenewalRepresentative = this.authContextToRepresentative[contextHash];
             //Establish representative auth state for auth callback and associate it with equivalent renewal requests
-            if (window.callBacksMappedToRenewStates[scope] && window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType]) {
-                window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType].push({ resolve, reject })
-            }
-            if (!window.callBacksMappedToRenewStates[scope]) {
-                window.callBacksMappedToRenewStates[scope] = { [authenticationRequest.responseType]: [{ resolve, reject }] }
-                window.callBacksMappedToRenewStates[authenticationRequest.state] = window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType]
-            }
-            if (!window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType]) {
-                window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType] = [{ resolve, reject }];
-                window.callBacksMappedToRenewStates[authenticationRequest.state] = window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType]                
-            }
-            
-            if (this.isRenewalState(authenticationRequest.state)) {
-                window.callBackMappedToRenewStates[authenticationRequest.state] =
-                    (errorDesc: string, token: string, error: string, tokenType: string) => {
-                        this._activeRenewals[scope] = null;
-                        for (let i = 0; i < window.callBacksMappedToRenewStates[authenticationRequest.state].length; ++i) {
-                            try {
-                                if (errorDesc || error) {
-                                    window.callBacksMappedToRenewStates[authenticationRequest.state][i].reject(errorDesc + ": " + error);;
-                                }
-                                else if (token) {
-                                    window.callBacksMappedToRenewStates[authenticationRequest.state][i].resolve(token);
-                                }
-                            } catch (e) {
-                                this._requestContext.logger.warning(e);
-                            }
-                        }
-                        window.callBacksMappedToRenewStates[scope][authenticationRequest.responseType] = null
-                        window.callBackMappedToRenewStates[authenticationRequest.state] = null;
-                    };
-            }
+            this.authContextToRepresentative[scope + authenticationRequest.responseType] = priorRenewalRepresentative || authenticationRequest.state;
+            this.renewalRequestToRepresentative[authenticationRequest.state] = this.authContextToRepresentative[contextHash];
         }
 
         /**
@@ -1138,7 +1120,7 @@ namespace Msal {
             }
 
             this.registerCallback(authenticationRequest, this.clientId, resolve, reject);
-            const frameHandle = this.addAdalFrame("msalIdTokenFrame", authenticationRequest.state);
+            // const frameHandle = this.addAdalFrame("msalIdTokenFrame", authenticationRequest.state);
 
             if (this.isRenewalState(authenticationRequest.state)) {
                 this._cacheStorage.setItem(Constants.nonceIdToken, authenticationRequest.nonce);
@@ -1147,8 +1129,24 @@ namespace Msal {
             this._renewStates.push(authenticationRequest.state);
             const urlNavigate = this.getRenewalUrl(authenticationRequest, scopes, user);
             this._requestContext.logger.infoPii('Navigate to:' + urlNavigate);
-            frameHandle.src = 'about:blank';
-            this.loadFrameTimeout(urlNavigate, 'adalIdTokenFrame', this.clientId, authenticationRequest.state);
+            // frameHandle.src = 'about:blank';
+            this.loadFrameTimeout(
+                urlNavigate,
+                this.getAuthContextHash(authenticationRequest.state, scope),
+                this.clientId,
+                authenticationRequest.state
+            );
+            const interval = setInterval(() => {
+                const iframe = document.getElementById(
+                    this.getAuthContextHash(authenticationRequest.state, scope)
+                )
+                if (iframe && iframe['contentWindow'].location.hash.length) {
+                    debugger
+
+                    clearInterval(interval)
+                }
+            },
+            1)
         }
 
         /**
@@ -1518,6 +1516,14 @@ namespace Msal {
         private getRenewalUrl (authenticationRequest: AuthenticationRequestParameters, scopes: string[], user: User) {
             const urlNavigate = authenticationRequest.createNavigateUrl(scopes) + '&prompt=none';
             return this.addHintParameters(urlNavigate, user);
+        }
+
+        private getAuthContextHash (scope: string, responseType: string) {
+            return scope + responseType;
+        }
+
+        private getRequestRepresentative (state: string, scope: string) {
+            return this.authContextToRepresentative[this.getAuthContextHash(state, scope)]
         }
     }
 }
